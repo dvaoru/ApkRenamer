@@ -2,6 +2,8 @@
 
 Use the renamer program to change an app name, a package name and an icon in an Android app.
 
+Requirement - [JRE 1.8](https://www.java.com/en/download/manual.jsp)
+
 Usage:
 
 java -jar renamer.jar [-a path/to/app.apk] [-o path/to/renamed.apk] [-n new_name] [-p new.package.name] [-i new_icon.png]
