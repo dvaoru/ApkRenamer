@@ -11,3 +11,7 @@ java -jar renamer.jar [-a path/to/app.apk] [-o path/to/renamed.apk] [-n new_name
 You can place app.apk to \"in\" folder, new_icon.png to \"icon\" folder
 and run java -jar renamer.jar without arguments. Your renamed_app.apk will be placed in \"out\" folder"
 
+## Notice
+- You may not use ApkRenamer for any illegal purposes;
+- The repacked APKs should not violate the original licenses.
+
