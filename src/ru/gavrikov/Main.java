@@ -52,12 +52,12 @@ public class Main {
     private static void showHelp() {
         String helpText =
                 "\n" +
-                "Use the renamer program to change an app name, a package name and an icon in an Android app.\n" +
-                "\n" +
-                "Usage: java -jar renamer.jar [-a path/to/app.apk] [-o path/to/renamed_app.apk] [-n new_name] [-p new.package.name] [-i new_icon.png] \n" +
-                "\n" +
-                "You can place app.apk to \"in\" folder, new_icon.png to \"icon\" folder \n" +
-                "and run java -jar renamer.jar without arguments. Your renamed_app.apk will be placed in \"out\" folder";
+                        "Use the renamer program to change an app name, a package name and an icon in an Android app.\n" +
+                        "\n" +
+                        "Usage: java -jar renamer.jar [-a path/to/app.apk] [-o path/to/renamed_app.apk] [-n new_name] [-p new.package.name] [-i new_icon.png]] \n" +
+                        "\n" +
+                        "You can place app.apk to \"in\" folder, new_icon.png to \"icon\" folder \n" +
+                        "and run java -jar renamer.jar without arguments. Your renamed_app.apk will be placed in \"out\" folder";
         System.out.println(helpText);
     }
 
@@ -314,7 +314,31 @@ class Renamer {
         return new File(getTempDir() + File.separator + "AndroidManifest.xml");
     }
 
+    /*
+        private void runJar(String command)  {
 
+              InputStream in;
+            Process proc = null;
+            String com = "java -jar " + command;
+            l(com);
+            {
+                try {
+                    proc = Runtime.getRuntime().exec(com);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            // Then retreive the process output
+            in = proc.getInputStream();
+            InputStream err = proc.getErrorStream();
+            try {
+                l(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+                l(new String(err.readAllBytes(), StandardCharsets.UTF_8));
+            }catch (IOException e){
+
+            }
+        }
+    */
     private void extractApk()  {
         l(" d " + getSubjectApk().toString() + " -f " + " -o " + getTempDir().toString());
         runJar(getApktoolJar(), new String[]{"d", getSubjectApk().toString(), "-f", "-o", getTempDir().toString()});
@@ -337,6 +361,7 @@ class Renamer {
 
     private Node getMainXmlNode(File f) {
         Node root = null;
+        //File f = new File(getManifestFile());
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         try {
             DocumentBuilder builder = factory.newDocumentBuilder();
@@ -415,7 +440,6 @@ class Renamer {
         Node manifest = getMainXmlNode(getManifestFile());
         if (!this.pacName.equals("")) {
             changePackageName(manifest, this.pacName);
-            l(manifest.toString());
         }
 
         changeStrings(manifest);
