@@ -21,6 +21,12 @@ and run \"java -jar renamer.jar\" without arguments. Your renamed_app.apk will b
 - You may not use ApkRenamer for any illegal purposes;
 - The repacked APKs should not violate the original licenses.
 
+## Third-Party Components
+
+[Apktool](https://github.com/iBotPeaches/Apktool)
+[Apk Sign](https://github.com/appium/sign)
+[Simple Java Image Tool](https://sjit.sourceforge.io/)
+
 ## Feedback
 If you have any question email me [dvaoru@gmail.com](https://mail.google.com/mail/u/0/?view=cm&fs=1&tf=1&source=mailto&to=dvaoru@gmail.com)
 
