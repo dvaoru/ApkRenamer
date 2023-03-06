@@ -25,7 +25,7 @@ public class Main {
     public static void main(String[] args) throws IOException {
         // java -jar -in /home/sasha/IdeaProjects/renamer/test/92.apk -out /home/sasha/IdeaProjects/renamer/test/92mod.apk -icon /home/sasha/Downloads/Renamer_jar/icon/Network-Download-icon.png
         ArrayList<String> arguments = new ArrayList(Arrays.asList(args));
-        if (arguments.indexOf("-h") != -1){
+        if (arguments.indexOf("-h") != -1) {
             showHelp();
             return;
         }
@@ -42,7 +42,7 @@ public class Main {
         Renamer mRenamer;
         if (args.length > 0) {
             mRenamer = new Renamer(in, out, name, pack, icon);
-        }else{
+        } else {
             mRenamer = new Renamer();
         }
         mRenamer.run();
@@ -90,29 +90,30 @@ class Renamer {
     }
 
     public Renamer(String in, String out, String name, String pack, String icon) {
-        if (!in.equals("")){
+        if (!in.equals("")) {
             this.inApk = new File(in);
         }
-        if (!out.equals("")){
+        if (!out.equals("")) {
             this.outApk = new File(out);
         }
-        if (!name.equals("")){
+        if (!name.equals("")) {
             this.appName = name;
         }
-        if (!pack.equals("")){
+        if (!pack.equals("")) {
             this.pacName = pack;
         }
-        if (!icon.equals("")){
+        if (!icon.equals("")) {
             this.iconFile = new File(icon);
         }
 
     }
 
-    void run(){
+    void run() {
         delTempDir();
         extractApk();
         modifySources();
         buildApk();
+        zipalignApk();
         signApk();
     }
 
@@ -141,6 +142,35 @@ class Renamer {
             System.out.println("nodeToString Transformer Exception");
         }
         return sw.toString();
+    }
+
+    private void runExec(File file, String[] args) {
+        String[] command = new String[args.length + 1];
+        command[0] = file.toString();
+        for (int i = 1; i < command.length; i ++){
+            command[i] = args[i-1];
+        }
+
+        try {
+            Process process = Runtime.getRuntime().exec(command);
+            //process.waitFor();
+            BufferedReader stdInput = new BufferedReader(new
+                    InputStreamReader(process.getInputStream()));
+
+            BufferedReader stdError = new BufferedReader(new
+                    InputStreamReader(process.getErrorStream()));
+            String s = null;
+            while ((s = stdInput.readLine()) != null) {
+                l(s);
+            }
+            while ((s = stdError.readLine()) != null) {
+                l(s);
+            }
+        } catch (Exception e) {
+            l("Error due execution " + file);
+            e.printStackTrace();
+        }
+
     }
 
     private void runJar(File file, String[] args) {
@@ -235,14 +265,18 @@ class Renamer {
     }
 
     private File getSignedApk() {
-        if (this.outApk == null){
+        if (this.outApk == null) {
             outApk = new File(getOutDir() + File.separator + pacName + ".apk");
-        }else{
-            if (this.outApk.isDirectory()){
-                this.outApk = new File (this.outApk + File.separator + pacName + ".apk");
+        } else {
+            if (this.outApk.isDirectory()) {
+                this.outApk = new File(this.outApk + File.separator + pacName + ".apk");
             }
         }
         return this.outApk;
+    }
+
+    private File getTempIdsigFile(){
+        return new File(getSignedApk() + ".idsig");
     }
 
     private File getSubjectApk() {
@@ -306,6 +340,25 @@ class Renamer {
         return new File(getBinDir() + File.separator + "SJIT.jar");
     }
 
+
+    private File getZipalignExe() {
+        String osName = System.getProperty("os.name");
+        File zipalignFile;
+        if (osName.startsWith("Windows")) {
+            zipalignFile = new File(getBinDir() + File.separator + "zipalign.exe");
+        } else {
+            zipalignFile = new File(getBinDir() + File.separator + "zipalign");
+        }
+        return zipalignFile;
+    }
+
+    private File getApksignerJar(){
+        return new File(getBinDir() + File.separator + "apksigner.jar");
+    }
+
+    private File getZipalignedApk() {
+        return new File(getOutDir() + File.separator + pacName + ".zipalign.apk");
+    }
     private File getSignApkJar() {
         return new File(getBinDir() + File.separator + "signapk.jar");
     }
@@ -339,7 +392,7 @@ class Renamer {
             }
         }
     */
-    private void extractApk()  {
+    private void extractApk() {
         l(" d " + getSubjectApk().toString() + " -f " + " -o " + getTempDir().toString());
         runJar(getApktoolJar(), new String[]{"d", getSubjectApk().toString(), "-f", "-o", getTempDir().toString()});
     }
@@ -348,7 +401,28 @@ class Renamer {
         runJar(getApktoolJar(), new String[]{"b", getTempDir().toString(), "-o", getUnsignedApk().toString()});
     }
 
+    private void zipalignApk(){
+        runExec(getZipalignExe(), new String[]{"-p", "-f", "-v", "4", getUnsignedApk().toString(), getZipalignedApk().toString()});
+        getUnsignedApk().delete();
+    }
+
+
     private void signApk()  {
+        String[] command = {
+                "sign",
+                "--key", getPk8Key().toString(),
+                "--cert", getPemKey().toString(),
+                "--out", getSignedApk().toString(),
+                getZipalignedApk().toString()
+        };
+        l("Signed apk " + getSignedApk().toString());
+        runJar(getApksignerJar(), command);
+        getZipalignedApk().delete();
+        getTempIdsigFile().delete();
+        l("");
+        l("Success. Path to your renamed apk: " + getSignedApk());
+    }
+    private void signApkOld() {
         l("signed apk " + getSignedApk().toString());
         runJar(getSignApkJar(), new String[]{getPemKey().toString(), getPk8Key().toString(),
                 getUnsignedApk().toString(), getSignedApk().toString()});
@@ -467,18 +541,16 @@ class Renamer {
         replaceAttribute(n, new String[]{"application"}, "android:icon", "@" + name + "/" + getNewIconName());
     }
 
-    private String getNewIconName(){
-        if (this.iconName.equals("")){
+    private String getNewIconName() {
+        if (this.iconName.equals("")) {
             this.iconName = generateString(new Random(), "abcdefghijklmnopqrstuvwxyz", 10);
         }
-        return  this.iconName;
+        return this.iconName;
     }
 
-    private static String generateString(Random rng, String characters, int length)
-    {
+    private static String generateString(Random rng, String characters, int length) {
         char[] text = new char[length];
-        for (int i = 0; i < length; i++)
-        {
+        for (int i = 0; i < length; i++) {
             text[i] = characters.charAt(rng.nextInt(characters.length()));
         }
         return new String(text);
