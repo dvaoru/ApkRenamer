@@ -517,6 +517,7 @@ class Renamer {
         }
 
         changeStrings(manifest);
+        fixProviderNoName(manifest);
 
         File newIcon = getIconPng();
         if (newIcon != null) {
@@ -609,6 +610,37 @@ class Renamer {
             Node node = getMainXmlNode(f);
             replaceStrings(node, forReplace);
             saveXmlFile(f, node);
+        }
+    }
+
+    //Fix problem if in manifest provider has no name
+    private void fixProviderNoName(Node manifest){
+
+        NodeList nl = manifest.getChildNodes();
+
+        for (int i = 0; i < nl.getLength(); i++){
+            Node node = nl.item(i);
+            if (node.getNodeName().contains("queries")){
+                NodeList child = node.getChildNodes();
+                for (int j = 0; j < child.getLength(); j++ ){
+                    Node provider = child.item(j);
+                    if (provider.getNodeName() == "provider"){
+                        Boolean isNameAbsent = true;
+                        NamedNodeMap attr = provider.getAttributes();
+                        for (int n = 0; n < attr.getLength(); n ++){
+                            l(attr.item(n).getNodeName());
+                            if (attr.item(n).getNodeName() == "android:name") isNameAbsent = false;
+                        }
+                        if (isNameAbsent) {
+                            Attr nameAttribute = provider.getOwnerDocument().createAttribute("android:name");
+                            nameAttribute.setValue("myname");
+                            Element providerElement = (Element) provider;
+                            providerElement.setAttributeNode(nameAttribute);
+                            l("Repair absent name tag in provider node");
+                        }
+                    }
+                }
+            }
         }
     }
 
