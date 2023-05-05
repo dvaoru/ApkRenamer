@@ -23,7 +23,7 @@ import javax.xml.transform.stream.StreamResult;
 public class Main {
 
     public static void main(String[] args) throws IOException {
-        // java -jar -in /home/sasha/IdeaProjects/renamer/test/92.apk -out /home/sasha/IdeaProjects/renamer/test/92mod.apk -icon /home/sasha/Downloads/Renamer_jar/icon/Network-Download-icon.png
+
         ArrayList<String> arguments = new ArrayList(Arrays.asList(args));
         if (arguments.indexOf("-h") != -1) {
             showHelp();
@@ -147,8 +147,8 @@ class Renamer {
     private void runExec(File file, String[] args) {
         String[] command = new String[args.length + 1];
         command[0] = file.toString();
-        for (int i = 1; i < command.length; i ++){
-            command[i] = args[i-1];
+        for (int i = 1; i < command.length; i++) {
+            command[i] = args[i - 1];
         }
 
         try {
@@ -173,31 +173,44 @@ class Renamer {
 
     }
 
-    private void runJar(File file, String[] args) {
-        final String mainClass;
-        final JarFile jarFile;
+    public class JarExecutionException extends RuntimeException {
+        public JarExecutionException(String message) {
+            super(message);
+        }
+    }
+
+    private void runJar(File file, String[] args) throws JarExecutionException {
         try {
-            jarFile = new JarFile(file);
-            try {
-                final Manifest manifest = jarFile.getManifest();
-                mainClass = manifest.getMainAttributes().getValue("Main-Class");
-            } finally {
-                jarFile.close();
+            String filePath = file.getAbsolutePath();
+            List<String> command = new ArrayList<String>();
+            command.add("java");
+            command.add("-jar");
+            command.add(filePath);
+            for (String arg : args) {
+                command.add(arg);
             }
-            final URLClassLoader child = new URLClassLoader(new URL[]{file.toURI().toURL()}, this.getClass().getClassLoader());
-            final Class classToLoad = Class.forName(mainClass, true, child);
-            final Method method = classToLoad.getDeclaredMethod("main", String[].class);
-            final Object[] arguments = {args};
-            if (!method.isAccessible()) {
-                method.setAccessible(true);
+            String logText = "Run: ";
+            for (String s : command) {
+                logText += " " + s;
             }
-            method.invoke(null, arguments);
-        } catch (IOException | ClassNotFoundException | NoSuchMethodException e) {
-            e.printStackTrace();
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (InvocationTargetException e) {
-            e.printStackTrace();
+            l(logText);
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String line;
+            while ((line = br.readLine()) != null) {
+                System.out.println(line);
+            }
+            int exitCode = p.waitFor();
+            if (exitCode != 0) {
+                throw new JarExecutionException("The " + file.getName() + " file exited with an error: " + exitCode);
+            }
+        } catch (IOException e) {
+            throw new JarExecutionException("An I/O error occurred while running the " + file.getName() + " file" + e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new JarExecutionException("The " + file.getName() + " file execution was interrupted" + e);
         }
     }
 
@@ -275,7 +288,7 @@ class Renamer {
         return this.outApk;
     }
 
-    private File getTempIdsigFile(){
+    private File getTempIdsigFile() {
         return new File(getSignedApk() + ".idsig");
     }
 
@@ -352,13 +365,14 @@ class Renamer {
         return zipalignFile;
     }
 
-    private File getApksignerJar(){
+    private File getApksignerJar() {
         return new File(getBinDir() + File.separator + "apksigner.jar");
     }
 
     private File getZipalignedApk() {
         return new File(getOutDir() + File.separator + pacName + ".zipalign.apk");
     }
+
     private File getSignApkJar() {
         return new File(getBinDir() + File.separator + "signapk.jar");
     }
@@ -367,47 +381,28 @@ class Renamer {
         return new File(getTempDir() + File.separator + "AndroidManifest.xml");
     }
 
-    /*
-        private void runJar(String command)  {
 
-              InputStream in;
-            Process proc = null;
-            String com = "java -jar " + command;
-            l(com);
-            {
-                try {
-                    proc = Runtime.getRuntime().exec(com);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            // Then retreive the process output
-            in = proc.getInputStream();
-            InputStream err = proc.getErrorStream();
-            try {
-                l(new String(in.readAllBytes(), StandardCharsets.UTF_8));
-                l(new String(err.readAllBytes(), StandardCharsets.UTF_8));
-            }catch (IOException e){
-
-            }
-        }
-    */
     private void extractApk() {
-        l(" d " + getSubjectApk().toString() + " -f " + " -o " + getTempDir().toString());
+        //l(" d " + getSubjectApk().toString() + " -f " + " -o " + getTempDir().toString());
         runJar(getApktoolJar(), new String[]{"d", getSubjectApk().toString(), "-f", "-o", getTempDir().toString()});
     }
 
     private void buildApk() {
-        runJar(getApktoolJar(), new String[]{"b", getTempDir().toString(), "-o", getUnsignedApk().toString()});
+        try {
+            runJar(getApktoolJar(), new String[]{"b", getTempDir().toString(), "-o", getUnsignedApk().toString()});
+        } catch (Renamer.JarExecutionException e) {
+            fixNoResourceError(); //Fix apktool problem with manifest
+            runJar(getApktoolJar(), new String[]{"b", getTempDir().toString(), "-o", getUnsignedApk().toString()});
+        }
     }
 
-    private void zipalignApk(){
+    private void zipalignApk() {
         runExec(getZipalignExe(), new String[]{"-p", "-f", "-v", "4", getUnsignedApk().toString(), getZipalignedApk().toString()});
         getUnsignedApk().delete();
     }
 
 
-    private void signApk()  {
+    private void signApk() {
         String[] command = {
                 "sign",
                 "--key", getPk8Key().toString(),
@@ -420,14 +415,21 @@ class Renamer {
         getZipalignedApk().delete();
         getTempIdsigFile().delete();
         l("");
-        l("Success. Path to your renamed apk: " + getSignedApk());
+        if (getSignedApk().exists()) {
+            l("Success. Path to your renamed apk: " + getSignedApk());
+        } else {
+            l(":-(");
+            l("Rename unsuccessful.");
+            l("Please email to the developer at dvaoru@gmail.com about your issue");
+        }
     }
-    private void signApkOld() {
-        l("signed apk " + getSignedApk().toString());
-        runJar(getSignApkJar(), new String[]{getPemKey().toString(), getPk8Key().toString(),
-                getUnsignedApk().toString(), getSignedApk().toString()});
-        getUnsignedApk().delete();
-    }
+
+//    private void signApkOld(){
+//        l("signed apk " + getSignedApk().toString());
+//        runJar(getSignApkJar(), new String[]{getPemKey().toString(), getPk8Key().toString(),
+//                getUnsignedApk().toString(), getSignedApk().toString()});
+//        getUnsignedApk().delete();
+//    }
 
     private void changePackageName(Node n, String packageName) {
         replaceAttribute(n, new String[]{}, "package", packageName);
@@ -614,20 +616,20 @@ class Renamer {
     }
 
     //Fix problem if in manifest provider has no name
-    private void fixProviderNoName(Node manifest){
+    private void fixProviderNoName(Node manifest) {
 
         NodeList nl = manifest.getChildNodes();
 
-        for (int i = 0; i < nl.getLength(); i++){
+        for (int i = 0; i < nl.getLength(); i++) {
             Node node = nl.item(i);
-            if (node.getNodeName().contains("queries")){
+            if (node.getNodeName().contains("queries")) {
                 NodeList child = node.getChildNodes();
-                for (int j = 0; j < child.getLength(); j++ ){
+                for (int j = 0; j < child.getLength(); j++) {
                     Node provider = child.item(j);
-                    if (provider.getNodeName() == "provider"){
+                    if (provider.getNodeName() == "provider") {
                         Boolean isNameAbsent = true;
                         NamedNodeMap attr = provider.getAttributes();
-                        for (int n = 0; n < attr.getLength(); n ++){
+                        for (int n = 0; n < attr.getLength(); n++) {
                             l(attr.item(n).getNodeName());
                             if (attr.item(n).getNodeName() == "android:name") isNameAbsent = false;
                         }
@@ -644,6 +646,33 @@ class Renamer {
         }
     }
 
+
+    //Fix problem with error: Error: No resource type specified (at 'value' with value '@1996685312')
+    //Make updates in the manifest
+    private void fixNoResourceError() {
+        Node manifest = getMainXmlNode(getManifestFile());
+        NodeList nl = manifest.getChildNodes();
+
+        for (int i = 0; i < nl.getLength(); i++) {
+            Node node = nl.item(i);
+            if (node.getNodeName().equals("application")) {
+                NodeList applicationsNodes = node.getChildNodes();
+                for (int j = 0; j < applicationsNodes.getLength(); j++) {
+                    Node item = applicationsNodes.item(j);
+                    if (item.getNodeName().equals("meta-data")) {
+                        NamedNodeMap attributes = item.getAttributes();
+                        if (attributes.getLength() > 1) {
+                            if (attributes.item(0).toString().contains("com.android.vending.splits")) {
+                                attributes.item(1).setNodeValue("base");
+                                l("value = " + attributes.item(1));
+                                saveXmlFile(getManifestFile(), manifest);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     private void replaceStrings(Node node, HashMap<String, String> forReplace) {
         NodeList nl = node.getChildNodes();
