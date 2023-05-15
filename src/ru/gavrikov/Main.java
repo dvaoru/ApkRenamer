@@ -1,14 +1,12 @@
 package ru.gavrikov;
 
 import java.io.*;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.net.URL;
-import java.net.URLClassLoader;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
-import java.util.jar.JarFile;
-import java.util.jar.Manifest;
 
+import org.apache.commons.io.FileUtils;
 import org.w3c.dom.*;
 import org.xml.sax.SAXException;
 
@@ -34,30 +32,32 @@ public class Main {
         String name = getArg(arguments, "-n");
         String pack = getArg(arguments, "-p");
         String icon = getArg(arguments, "-i");
+        Boolean isDeepRename = arguments.indexOf("-d") != -1;
+
 
         System.out.println(in);
         System.out.println(out);
         System.out.println(icon);
 
         Renamer mRenamer;
-        if (args.length > 0) {
-            mRenamer = new Renamer(in, out, name, pack, icon);
+        if (args.length > 1) {
+            mRenamer = new Renamer(in, out, name, pack, icon, isDeepRename);
         } else {
-            mRenamer = new Renamer();
+            mRenamer = new Renamer(isDeepRename);
         }
+
         mRenamer.run();
 
     }
 
     private static void showHelp() {
-        String helpText =
-                "\n" +
-                        "Use the renamer program to change an app name, a package name and an icon in an Android app.\n" +
-                        "\n" +
-                        "Usage: java -jar renamer.jar [-a path/to/app.apk] [-o path/to/renamed_app.apk] [-n new_name] [-p new.package.name] [-i new_icon.png]] \n" +
-                        "\n" +
-                        "You can place app.apk to \"in\" folder, new_icon.png to \"icon\" folder \n" +
-                        "and run java -jar renamer.jar without arguments. Your renamed_app.apk will be placed in \"out\" folder";
+        String helpText = "\n" + "Use the renamer program to change an app name, a package name and an icon in an Android app.\n"
+                + "\n" + "Usage: java -jar renamer.jar [-a path/to/app.apk] [-o path/to/renamed_app.apk] [-n new_name] [-p new.package.name] [-i new_icon.png] \n"
+                + "\n" + "You can place app.apk to \"in\" folder, new_icon.png to \"icon\" folder \n"
+                + "and run java -jar renamer.jar without arguments. Your renamed_app.apk will be placed in \"out\" folder"
+                + "\n\nAdd the [-d] flag to perform a \"deep renaming\"."
+                + "\n This will search for instances of the old package name in all files and replace them with the new package name."
+                + "\n Note that the deep renaming may cause unintended side effects, such as breaking app functionality.";
         System.out.println(helpText);
     }
 
@@ -83,13 +83,16 @@ class Renamer {
     private String pacName = "";
     private String iconName = "";
 
+    private Boolean isDeepRenaming = false;
 
-    Renamer() throws IOException {
-        appName = inputNewName();
-        pacName = inputNewPackageName();
+
+    Renamer(Boolean isDeepRenaming) {
+        this.appName = inputNewName();
+        this.pacName = inputNewPackageName();
+        this.isDeepRenaming = isDeepRenaming;
     }
 
-    public Renamer(String in, String out, String name, String pack, String icon) {
+    public Renamer(String in, String out, String name, String pack, String icon, Boolean isDeepRenaming) {
         if (!in.equals("")) {
             this.inApk = new File(in);
         }
@@ -105,6 +108,8 @@ class Renamer {
         if (!icon.equals("")) {
             this.iconFile = new File(icon);
         }
+
+        this.isDeepRenaming = isDeepRenaming;
 
     }
 
@@ -150,15 +155,18 @@ class Renamer {
         for (int i = 1; i < command.length; i++) {
             command[i] = args[i - 1];
         }
+        String logMessage = "RunExe: ";
+        for (String c : command) {
+            logMessage += c + " ";
+        }
+        l(logMessage);
 
         try {
             Process process = Runtime.getRuntime().exec(command);
             //process.waitFor();
-            BufferedReader stdInput = new BufferedReader(new
-                    InputStreamReader(process.getInputStream()));
+            BufferedReader stdInput = new BufferedReader(new InputStreamReader(process.getInputStream()));
 
-            BufferedReader stdError = new BufferedReader(new
-                    InputStreamReader(process.getErrorStream()));
+            BufferedReader stdError = new BufferedReader(new InputStreamReader(process.getErrorStream()));
             String s = null;
             while ((s = stdInput.readLine()) != null) {
                 l(s);
@@ -260,6 +268,11 @@ class Renamer {
     private File getTempDir() {
         return new File(getCurrentDir() + File.separator + "temp");
     }
+
+    private File getCacheDir() {
+        return new File(getCurrentDir() + File.separator + "cache");
+    }
+
 
     private File getKeyDir() {
         return new File(getCurrentDir() + File.separator + "keys");
@@ -403,13 +416,7 @@ class Renamer {
 
 
     private void signApk() {
-        String[] command = {
-                "sign",
-                "--key", getPk8Key().toString(),
-                "--cert", getPemKey().toString(),
-                "--out", getSignedApk().toString(),
-                getZipalignedApk().toString()
-        };
+        String[] command = {"sign", "--key", getPk8Key().toString(), "--cert", getPemKey().toString(), "--out", getSignedApk().toString(), getZipalignedApk().toString()};
         l("Signed apk " + getSignedApk().toString());
         runJar(getApksignerJar(), command);
         getZipalignedApk().delete();
@@ -423,13 +430,6 @@ class Renamer {
             l("Please email to the developer at dvaoru@gmail.com about your issue");
         }
     }
-
-//    private void signApkOld(){
-//        l("signed apk " + getSignedApk().toString());
-//        runJar(getSignApkJar(), new String[]{getPemKey().toString(), getPk8Key().toString(),
-//                getUnsignedApk().toString(), getSignedApk().toString()});
-//        getUnsignedApk().delete();
-//    }
 
     private void changePackageName(Node n, String packageName) {
         replaceAttribute(n, new String[]{}, "package", packageName);
@@ -479,16 +479,6 @@ class Renamer {
         return null;
     }
 
-    private void writeFile(File file, String text) {
-        try {
-            BufferedWriter writer = new BufferedWriter(new FileWriter(file));
-            writer.write(text);
-            writer.close();
-        } catch (IOException e) {
-            l("Error file: " + file);
-            l(e.toString());
-        }
-    }
 
     private void saveXmlFile(File file, Node node) {
         // write the content into xml file
@@ -514,9 +504,14 @@ class Renamer {
     // We do all changes in unzipped sources
     private void modifySources() {
         Node manifest = getMainXmlNode(getManifestFile());
+
+        String packageName = getPackageName(manifest);
+
+
         if (!this.pacName.equals("")) {
             changePackageName(manifest, this.pacName);
         }
+
 
         changeStrings(manifest);
         fixProviderNoName(manifest);
@@ -527,6 +522,11 @@ class Renamer {
             changeIconName(manifest);
         }
         saveXmlFile(getManifestFile(), manifest);
+        if (this.isDeepRenaming) {
+            l("Perform deep renaming...");
+            renamePackageFolders(packageName, this.pacName);
+        }
+
     }
 
     private void changeImages(Node manifest, File newIcon) {
@@ -561,11 +561,9 @@ class Renamer {
 
     private void sendNewIcon(File newIcon, File minmapDir, String newIconName) {
         int size = getDpi(minmapDir);
-        String command = "" + getSjitJar() + " -in " + newIcon + " -resize " + size + "px -out " +
-                minmapDir + File.separator + newIconName + ".png";
+        String command = "" + getSjitJar() + " -in " + newIcon + " -resize " + size + "px -out " + minmapDir + File.separator + newIconName + ".png";
         l(command);
-        runJar(getSjitJar(), new String[]{"-in", newIcon.toString(), "-resize", size + "px", "-out",
-                minmapDir + File.separator + newIconName + ".png"});
+        runJar(getSjitJar(), new String[]{"-in", newIcon.toString(), "-resize", size + "px", "-out", minmapDir + File.separator + newIconName + ".png"});
     }
 
 
@@ -666,6 +664,7 @@ class Renamer {
                                 attributes.item(1).setNodeValue("base");
                                 l("value = " + attributes.item(1));
                                 saveXmlFile(getManifestFile(), manifest);
+                                l("Repair error: No resource type specified");
                             }
                         }
                     }
@@ -725,5 +724,140 @@ class Renamer {
         return result;
     }
 
+    //Replace a text in a file
+    private void replaceText(File file, String toReplace, String replacement) {
+        try {
+            Charset charset = StandardCharsets.UTF_8;
+            String content = new String(Files.readAllBytes(file.toPath()), charset);
+            content = content.replaceAll(toReplace, replacement);
+            Files.write(file.toPath(), content.getBytes(charset));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
+    //Replace bytes in a file
+    private void replaceBytesInFile(File file, byte[] searchBytes, byte[] replaceBytes) throws IOException {
+        byte[] origin = FileUtils.readFileToByteArray(file);
+        byte[] replaced = replaceBytesInArray(origin, searchBytes, replaceBytes);
+
+        if (replaced != null) {
+            l("File: " + file + " changed");
+            FileUtils.delete(file);
+            FileUtils.writeByteArrayToFile(file, replaced);
+        }
+    }
+
+    private byte[] replaceBytesInArray(byte[] origin, byte[] searchBytes, byte[] replaceBytes) {
+        List<Byte> originList = arrayToList(origin);
+        List<Byte> searchList = arrayToList(searchBytes);
+        List<Byte> replaceList = arrayToList(replaceBytes);
+        if (searchList.equals(replaceList)) return null;
+        Boolean isChanged = false;
+        while (true) {
+            int startPosition = Collections.indexOfSubList(originList, searchList);
+            if (startPosition == -1) break;
+            isChanged = true;
+            for (int i = 0; i < searchBytes.length; i++) {
+                originList.remove(startPosition);
+            }
+            originList.addAll(startPosition, replaceList);
+        }
+        byte[] result = new byte[originList.size()];
+        for (int i = 0; i < originList.size(); i++) {
+            result[i] = originList.get(i);
+        }
+        if (isChanged) {
+            return result;
+        } else {
+            return null;
+        }
+    }
+
+    private static List<Byte> arrayToList(byte[] arr) {
+        List<Byte> result = new ArrayList<>();
+        for (byte b : arr) {
+            result.add(b);
+        }
+        return result;
+    }
+
+
+    //Recursive list of files in a folder
+    private ArrayList<File> getFilesList(File folder) {
+        ArrayList<File> result = (ArrayList<File>) FileUtils.listFiles(folder, null, true);
+        return result;
+    }
+
+    //Get package name from Manifest
+    private String getPackageName(Node manifest) {
+        return manifest.getAttributes().getNamedItem("package").getNodeValue();
+    }
+
+
+    //Rename folders with smali for new package
+    private void renamePackageFolders(String oldPackageName, String newPackageName) {
+        List<File> smaliFolders = Arrays.asList(Objects.requireNonNull(getTempDir().listFiles(new FileFilter() {
+            @Override
+            public boolean accept(File pathname) {
+                return (pathname.isDirectory() && pathname.getName().contains("smali"));
+            }
+        })));
+
+        for (File folder : smaliFolders) {
+            File cache = movePackageToCache(folder, oldPackageName);
+            if (cache != null) {
+                File destination = moveFromCacheToPackage(folder, newPackageName);
+            }
+        }
+        ArrayList<File> smaliFiles = getFilesList(getTempDir());
+        for (File f : smaliFiles) {
+            String oldPackageLabel = oldPackageName.replace(".", "/");//Lru/gavrikov/mocklocations
+            String newPackageLabel = newPackageName.replace(".", "/");
+            try {
+                replaceBytesInFile(f, oldPackageLabel.getBytes(), newPackageLabel.getBytes());
+                replaceBytesInFile(f, oldPackageName.getBytes(), newPackageName.getBytes());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+
+    }
+
+    private File movePackageToCache(File smaliFolder, String packageName) {
+        File sourceFolder = new File(smaliFolder.getAbsolutePath() + File.separator + packageName.replace(".", File.separator));
+        if (sourceFolder.exists()) {
+            try {
+                File cache = getCacheDir();
+                FileUtils.deleteDirectory(cache);
+                cache.mkdir();
+                FileUtils.copyDirectory(sourceFolder, cache);
+                File oldPackageRoot = new File(smaliFolder, packageName.split("\\.")[0]);
+                FileUtils.deleteDirectory(oldPackageRoot);
+                return cache;
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return null;
+    }
+
+    private File moveFromCacheToPackage(File smaliFolder, String packageName) {
+        File cache = getCacheDir();
+        File targetFolder = smaliFolder;
+        for (String name : packageName.split("\\.")) {
+            targetFolder = new File(targetFolder, name);
+            targetFolder.mkdir();
+        }
+        try {
+            FileUtils.copyDirectory(cache, targetFolder);
+            FileUtils.deleteDirectory(cache);
+            return targetFolder;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+//https://forum.xda-developers.com/t/how-to-guide-mod-change-package-names-of-apks.2760965/
 }
