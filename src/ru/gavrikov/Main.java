@@ -57,7 +57,7 @@ public class Main {
                 + "and run java -jar renamer.jar without arguments. Your renamed_app.apk will be placed in \"out\" folder"
                 + "\n\nAdd the [-d] flag to perform a \"deep renaming\"."
                 + "\n This will search for instances of the old package name in all files and replace them with the new package name."
-                + "\n Note that the deep renaming may cause unintended side effects, such as breaking app functionality.";
+                + "\n Note that the deep renaming may cause unintended side effects, such as breaking the app functionality.";
         System.out.println(helpText);
     }
 
