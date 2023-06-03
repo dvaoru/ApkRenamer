@@ -32,18 +32,21 @@ public class Main {
         String name = getArg(arguments, "-n");
         String pack = getArg(arguments, "-p");
         String icon = getArg(arguments, "-i");
-        Boolean isDeepRename = arguments.indexOf("-d") != -1;
+        Boolean isDeepRename = arguments.contains("-d");
+        Boolean isPauseActive = arguments.contains("-t");
+        Boolean isSkipModify = arguments.contains("-m");
 
 
         System.out.println(in);
         System.out.println(out);
         System.out.println(icon);
 
+
         Renamer mRenamer;
         if (args.length > 1) {
-            mRenamer = new Renamer(in, out, name, pack, icon, isDeepRename);
+            mRenamer = new Renamer(in, out, name, pack, icon, isDeepRename, isPauseActive, isSkipModify);
         } else {
-            mRenamer = new Renamer(isDeepRename);
+            mRenamer = new Renamer(isDeepRename, isPauseActive, isSkipModify);
         }
 
         mRenamer.run();
@@ -57,7 +60,12 @@ public class Main {
                 + "and run java -jar renamer.jar without arguments. Your renamed_app.apk will be placed in \"out\" folder"
                 + "\n\nAdd the [-d] flag to perform a \"deep renaming\"."
                 + "\n This will search for instances of the old package name in all files and replace them with the new package name."
-                + "\n Note that the deep renaming may cause unintended side effects, such as breaking the app functionality.";
+                + "\n Note that the deep renaming may cause unintended side effects, such as breaking the app functionality."
+                + "\n\nAdd the [-t] flag and the program extract all apk resources at \"temp\" folder where you can modify it as you want."
+                + "\n After you made the changes you can resume program flow and it builds and signs the renamed apk"
+                + "\n\nAdd the [-m] flag and the program will not modify the resources of the apk."
+                + "\n It extracts the apk resources to \"temp\" folder where you can modify what you want manually."
+                + "\n The program will not rename anything. After you made changes resume the program and it builds and signs the package.";
         System.out.println(helpText);
     }
 
@@ -80,19 +88,32 @@ class Renamer {
 
 
     private String appName = "";
-    private String pacName = "";
+    private String pacName = "out";
     private String iconName = "";
 
     private Boolean isDeepRenaming = false;
+    private Boolean isPauseActive = false;
+    private Boolean isSkipModify = false;
 
 
-    Renamer(Boolean isDeepRenaming) {
-        this.appName = inputNewName();
-        this.pacName = inputNewPackageName();
+    Renamer(Boolean isDeepRenaming, Boolean isPauseActive, Boolean isSkipModify) {
+        if (!isSkipModify) {
+            this.appName = inputNewName();
+            this.pacName = inputNewPackageName();
+        }
         this.isDeepRenaming = isDeepRenaming;
+        this.isPauseActive = isPauseActive;
+        this.isSkipModify = isSkipModify;
     }
 
-    public Renamer(String in, String out, String name, String pack, String icon, Boolean isDeepRenaming) {
+    public Renamer(String in,
+                   String out,
+                   String name,
+                   String pack,
+                   String icon,
+                   Boolean isDeepRenaming,
+                   Boolean isPauseActive,
+                   Boolean isSkipModify) {
         if (!in.equals("")) {
             this.inApk = new File(in);
         }
@@ -110,17 +131,32 @@ class Renamer {
         }
 
         this.isDeepRenaming = isDeepRenaming;
+        this.isPauseActive = isPauseActive;
+        this.isSkipModify = isSkipModify;
 
     }
 
     void run() {
         delTempDir();
         extractApk();
-        modifySources();
+        if (!isSkipModify) modifySources();
+        if (isPauseActive || isSkipModify) makePause();
         buildApk();
         zipalignApk();
         signApk();
     }
+
+    //Show a message and wait enter to proceed
+    private void makePause() {
+        String message = ("\nThe process of building the package on the pause." +
+                "\n You can modify the app resources in \"temp\" folder." +
+                "\n The \"temp\" folder: " + getTempDir() +
+                "\n Press ENTER to proceed the building process.\n");
+        System.out.println(message);
+        Scanner in = new Scanner(System.in);
+        in.nextLine();
+    }
+
 
     private static void deleteFolder(File folder) {
         File[] files = folder.listFiles();
