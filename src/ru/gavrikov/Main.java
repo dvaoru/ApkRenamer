@@ -9,6 +9,7 @@ import java.util.*;
 import org.apache.commons.io.FileUtils;
 import org.w3c.dom.*;
 import org.xml.sax.SAXException;
+import sun.security.util.ArrayUtil;
 
 import javax.xml.parsers.*;
 import javax.xml.transform.OutputKeys;
@@ -27,27 +28,34 @@ public class Main {
             showHelp();
             return;
         }
-        String in = getArg(arguments, "-a");
-        String out = getArg(arguments, "-o");
-        String name = getArg(arguments, "-n");
-        String pack = getArg(arguments, "-p");
-        String icon = getArg(arguments, "-i");
-        Boolean isDeepRename = arguments.contains("-d");
-        Boolean isPauseActive = arguments.contains("-t");
-        Boolean isSkipModify = arguments.contains("-m");
 
+        ArgumentsParser parser =new ArgumentsParser(arguments);
+        String in = parser.extractArgument("-a");
+        String out = parser.extractArgument("-o");
+        String name = parser.extractArgument( "-n");
+        String pack = parser.extractArgument("-p");
+        String icon = parser.extractArgument( "-i");
+        String decodeArguments = parser.extractArgument( "-da");
+        String buildArguments = parser.extractArgument( "-ba");
+
+
+        Boolean isDeepRename = parser.extractBooleanArgument("-d");
+        Boolean isPauseActive = parser.extractBooleanArgument("-t");
+        Boolean isSkipModify = parser.extractBooleanArgument("-m");
+
+        System.out.println("build: " + buildArguments);
 
         System.out.println(in);
         System.out.println(out);
         System.out.println(icon);
 
 
-        Renamer mRenamer;
-        if (args.length > 1) {
-            mRenamer = new Renamer(in, out, name, pack, icon, isDeepRename, isPauseActive, isSkipModify);
-        } else {
-            mRenamer = new Renamer(isDeepRename, isPauseActive, isSkipModify);
-        }
+        Renamer mRenamer = new Renamer(in, out, name, pack, icon, isDeepRename, isPauseActive, isSkipModify, decodeArguments, buildArguments);
+//        if (args.length > 1) {
+//            mRenamer = new Renamer(in, out, name, pack, icon, isDeepRename, isPauseActive, isSkipModify);
+//        } else {
+//            mRenamer = new Renamer(isDeepRename, isPauseActive, isSkipModify);
+//        }
 
         mRenamer.run();
 
@@ -65,21 +73,42 @@ public class Main {
                 + "\n After you made the changes you can resume program flow and it builds and signs the renamed apk"
                 + "\n\nAdd the [-m] flag and the program will not modify the resources of the apk."
                 + "\n It extracts the apk resources to \"temp\" folder where you can modify what you want manually."
-                + "\n The program will not rename anything. After you made changes resume the program and it builds and signs the package.";
+                + "\n The program will not rename anything. After you made changes resume the program and it builds and signs the package."
+                + "\n\nAdd the [-da \"-option1 -option2\"] to pass arguments to Apktool when it decodes the apk."
+                + "\nAdd the [-ba \"-option1 -option2\"] to pass arguments to Apktool when it builds the apk."
+                + "\nThe string with arguments for Apktool should be enclosed in quotation marks.";
         System.out.println(helpText);
     }
 
-    private static String getArg(ArrayList<String> al, String argName) {
-        String result = "";
-        int index = al.indexOf(argName);
-        if (index != -1) {
-            result = al.get((index + 1));
-        }
-
-        return result;
-    }
 }
 
+class ArgumentsParser{
+    ArrayList<String> arguments;
+   ArgumentsParser(ArrayList<String> args){
+       arguments = args;
+   }
+
+   String extractArgument(String argName){
+       String result = "";
+       int index = arguments.indexOf(argName);
+       if (index != -1) {
+           result = arguments.get((index + 1));
+           arguments.remove(index);
+           arguments.remove(index);
+       }
+       return result;
+   }
+
+   Boolean extractBooleanArgument(String argName){
+       Boolean result = false;
+       int index = arguments.indexOf(argName);
+       if (index != -1) {
+           result = true;
+           arguments.remove(index);
+       }
+       return result;
+   }
+}
 
 class Renamer {
     private File inApk = null;
@@ -95,16 +124,19 @@ class Renamer {
     private Boolean isPauseActive = false;
     private Boolean isSkipModify = false;
 
+    private String decodeArguments = "";
+    private String buildArguments = "";
 
-    Renamer(Boolean isDeepRenaming, Boolean isPauseActive, Boolean isSkipModify) {
-        if (!isSkipModify) {
-            this.appName = inputNewName();
-            this.pacName = inputNewPackageName();
-        }
-        this.isDeepRenaming = isDeepRenaming;
-        this.isPauseActive = isPauseActive;
-        this.isSkipModify = isSkipModify;
-    }
+
+//    Renamer(String in, String out, String name, String pack, String icon, Boolean isDeepRenaming, Boolean isPauseActive, Boolean isSkipModify) {
+//        if (!isSkipModify) {
+//            this.appName = inputNewName();
+//            this.pacName = inputNewPackageName();
+//        }
+//        this.isDeepRenaming = isDeepRenaming;
+//        this.isPauseActive = isPauseActive;
+//        this.isSkipModify = isSkipModify;
+//    }
 
     public Renamer(String in,
                    String out,
@@ -113,22 +145,33 @@ class Renamer {
                    String icon,
                    Boolean isDeepRenaming,
                    Boolean isPauseActive,
-                   Boolean isSkipModify) {
+                   Boolean isSkipModify,
+                   String decodeArguments,
+                   String buildArguments) {
         if (!in.equals("")) {
             this.inApk = new File(in);
         }
         if (!out.equals("")) {
             this.outApk = new File(out);
         }
-        if (!name.equals("")) {
-            this.appName = name;
-        }
-        if (!pack.equals("")) {
-            this.pacName = pack;
+        if (!isSkipModify) {
+            if (!name.equals("")) {
+                this.appName = name;
+            } else {
+                this.appName = inputNewName();
+            }
+            if (!pack.equals("")) {
+                this.pacName = pack;
+            } else {
+                this.pacName = inputNewPackageName();
+            }
         }
         if (!icon.equals("")) {
             this.iconFile = new File(icon);
         }
+
+        this.decodeArguments = decodeArguments;
+        this.buildArguments = buildArguments;
 
         this.isDeepRenaming = isDeepRenaming;
         this.isPauseActive = isPauseActive;
@@ -432,17 +475,41 @@ class Renamer {
 
 
     private void extractApk() {
-        //l(" d " + getSubjectApk().toString() + " -f " + " -o " + getTempDir().toString());
-        runJar(getApktoolJar(), new String[]{"d", getSubjectApk().toString(), "-f", "-o", getTempDir().toString()});
+        String[] firstArgs = new String[]{"d", getSubjectApk().toString(), "-f", "-o", getTempDir().toString()};
+        String[] additionalArgs = stringToArguments(decodeArguments);
+        String[] command = concat(firstArgs, additionalArgs);
+        runJar(getApktoolJar(), command);
     }
 
     private void buildApk() {
+        String[] firstArgs = new String[]{"b", getTempDir().toString(), "-o", getUnsignedApk().toString()};
+        String[] additionalArgs = stringToArguments(buildArguments);
+        String[] command = concat(firstArgs, additionalArgs);
+
         try {
-            runJar(getApktoolJar(), new String[]{"b", getTempDir().toString(), "-o", getUnsignedApk().toString()});
+            runJar(getApktoolJar(), command);
         } catch (Renamer.JarExecutionException e) {
             fixNoResourceError(); //Fix apktool problem with manifest
-            runJar(getApktoolJar(), new String[]{"b", getTempDir().toString(), "-o", getUnsignedApk().toString()});
+            runJar(getApktoolJar(), command);
         }
+    }
+
+    private static <T> T[] concat(T[] first, T[] second) {
+        T[] result = Arrays.copyOf(first, first.length + second.length);
+        System.arraycopy(second, 0, result, first.length, second.length);
+        return result;
+    }
+
+    private String[] stringToArguments(String s){
+        ArrayList<String> result = new ArrayList();
+        String[] listArgs = s.split(" ");
+        for (int i = 0; i < listArgs.length; i++) {
+            String value = listArgs[i];
+            if (!value.equals("")){
+                result.add(value);
+            }
+        }
+        return result.toArray(new String[0]);
     }
 
     private void zipalignApk() {

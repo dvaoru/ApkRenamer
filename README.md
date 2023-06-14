@@ -30,6 +30,13 @@ Optionally you can add the [-m] flag and the program will not modify the resourc
 
 &nbsp;&nbsp;&nbsp;&nbsp;The program will not rename anything. After you made changes resume the program, and it builds and signs the package.
 
+Optionally, you can pass arguments to Apktool.
+
+&nbsp;&nbsp;&nbsp;&nbsp; To implement arguments when Apktool decodes the apk, add the following flag: -da "-option1 -option2". For example, -da "--keep-broken-res". The string with arguments for Apktool should be enclosed in quotation marks.
+
+&nbsp;&nbsp;&nbsp;&nbsp; To implement arguments when Apktool builds the apk, add the following flag: -ba "-option1 -option2". For example, -ba "--use-aapt2". The string with arguments for Apktool should be enclosed in quotation marks.
+
+&nbsp;&nbsp;&nbsp;&nbsp; You can find a list of Apktool's arguments on its [official site](https://ibotpeaches.github.io/Apktool/documentation/).
 ## Download:
 
 [ApkRenamer.zip](https://github.com/dvaoru/ApkRenamer/releases/latest/download/ApkRenamer.zip)
