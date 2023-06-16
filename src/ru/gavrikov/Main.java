@@ -9,7 +9,6 @@ import java.util.*;
 import org.apache.commons.io.FileUtils;
 import org.w3c.dom.*;
 import org.xml.sax.SAXException;
-import sun.security.util.ArrayUtil;
 
 import javax.xml.parsers.*;
 import javax.xml.transform.OutputKeys;
@@ -489,8 +488,15 @@ class Renamer {
         try {
             runJar(getApktoolJar(), command);
         } catch (Renamer.JarExecutionException e) {
-            fixNoResourceError(); //Fix apktool problem with manifest
-            runJar(getApktoolJar(), command);
+            try {
+                l("\n!!!\nTry to fix No resource error");
+                fixNoResourceError(); //Fix apktool problem with manifest
+                runJar(getApktoolJar(), command);
+            } catch (Renamer.JarExecutionException e1){
+                l("\n!!!\nTry to fix Invalid resource directory name error by --use-aapt2");
+                String[] fixInvalidResourceDirectoryNameCommand = concat(command, new String[]{"--use-aapt2"});
+                runJar(getApktoolJar(), fixInvalidResourceDirectoryNameCommand);
+            }
         }
     }
 
