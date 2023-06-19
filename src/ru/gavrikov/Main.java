@@ -200,10 +200,12 @@ class Renamer {
     private void replaceViaDictionary() {
         Map<String, String> dictionary = getDictionary(dictionaryPath);
         ArrayList<File> filesList = getFilesList(getTempDir());
+
         for (File f : filesList) {
             for (String key : dictionary.keySet()) {
                 try {
-                    replaceBytesInFile(f, key.getBytes(), dictionary.get(key).getBytes());
+
+                    replaceBytesInFile(f, key.getBytes("UTF-8"), dictionary.get(key).getBytes("UTF-8"));
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
