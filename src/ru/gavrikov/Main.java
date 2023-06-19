@@ -4,8 +4,10 @@ import java.io.*;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 
+import javafx.util.Pair;
 import org.apache.commons.io.FileUtils;
 import org.w3c.dom.*;
 import org.xml.sax.SAXException;
@@ -28,28 +30,27 @@ public class Main {
             return;
         }
 
-        ArgumentsParser parser =new ArgumentsParser(arguments);
+        ArgumentsParser parser = new ArgumentsParser(arguments);
         String in = parser.extractArgument("-a");
         String out = parser.extractArgument("-o");
-        String name = parser.extractArgument( "-n");
+        String name = parser.extractArgument("-n");
         String pack = parser.extractArgument("-p");
-        String icon = parser.extractArgument( "-i");
-        String decodeArguments = parser.extractArgument( "-da");
-        String buildArguments = parser.extractArgument( "-ba");
+        String icon = parser.extractArgument("-i");
+        String dictionary = parser.extractArgument("-r");
+        String decodeArguments = parser.extractArgument("-da");
+        String buildArguments = parser.extractArgument("-ba");
 
 
         Boolean isDeepRename = parser.extractBooleanArgument("-d");
         Boolean isPauseActive = parser.extractBooleanArgument("-t");
         Boolean isSkipModify = parser.extractBooleanArgument("-m");
 
-        System.out.println("build: " + buildArguments);
-
         System.out.println(in);
         System.out.println(out);
         System.out.println(icon);
 
 
-        Renamer mRenamer = new Renamer(in, out, name, pack, icon, isDeepRename, isPauseActive, isSkipModify, decodeArguments, buildArguments);
+        Renamer mRenamer = new Renamer(in, out, name, pack, icon, isDeepRename, isPauseActive, isSkipModify, decodeArguments, buildArguments, dictionary);
 //        if (args.length > 1) {
 //            mRenamer = new Renamer(in, out, name, pack, icon, isDeepRename, isPauseActive, isSkipModify);
 //        } else {
@@ -75,38 +76,40 @@ public class Main {
                 + "\n The program will not rename anything. After you made changes resume the program and it builds and signs the package."
                 + "\n\nAdd the [-da \"-option1 -option2\"] to pass arguments to Apktool when it decodes the apk."
                 + "\nAdd the [-ba \"-option1 -option2\"] to pass arguments to Apktool when it builds the apk."
-                + "\nThe string with arguments for Apktool should be enclosed in quotation marks.";
+                + "\nThe string with arguments for Apktool should be enclosed in quotation marks."
+                + "\n\nAdd the [-r] <path/to/dictionary.txt> flag and the program will replace text in APK files using a dictionary.";
         System.out.println(helpText);
     }
 
 }
 
-class ArgumentsParser{
+class ArgumentsParser {
     ArrayList<String> arguments;
-   ArgumentsParser(ArrayList<String> args){
-       arguments = args;
-   }
 
-   String extractArgument(String argName){
-       String result = "";
-       int index = arguments.indexOf(argName);
-       if (index != -1) {
-           result = arguments.get((index + 1));
-           arguments.remove(index);
-           arguments.remove(index);
-       }
-       return result;
-   }
+    ArgumentsParser(ArrayList<String> args) {
+        arguments = args;
+    }
 
-   Boolean extractBooleanArgument(String argName){
-       Boolean result = false;
-       int index = arguments.indexOf(argName);
-       if (index != -1) {
-           result = true;
-           arguments.remove(index);
-       }
-       return result;
-   }
+    String extractArgument(String argName) {
+        String result = "";
+        int index = arguments.indexOf(argName);
+        if (index != -1) {
+            result = arguments.get((index + 1));
+            arguments.remove(index);
+            arguments.remove(index);
+        }
+        return result;
+    }
+
+    Boolean extractBooleanArgument(String argName) {
+        Boolean result = false;
+        int index = arguments.indexOf(argName);
+        if (index != -1) {
+            result = true;
+            arguments.remove(index);
+        }
+        return result;
+    }
 }
 
 class Renamer {
@@ -125,6 +128,8 @@ class Renamer {
 
     private String decodeArguments = "";
     private String buildArguments = "";
+
+    private String dictionaryPath = "";
 
 
 //    Renamer(String in, String out, String name, String pack, String icon, Boolean isDeepRenaming, Boolean isPauseActive, Boolean isSkipModify) {
@@ -146,7 +151,8 @@ class Renamer {
                    Boolean isPauseActive,
                    Boolean isSkipModify,
                    String decodeArguments,
-                   String buildArguments) {
+                   String buildArguments,
+                   String dictionaryPath) {
         if (!in.equals("")) {
             this.inApk = new File(in);
         }
@@ -176,6 +182,8 @@ class Renamer {
         this.isPauseActive = isPauseActive;
         this.isSkipModify = isSkipModify;
 
+        this.dictionaryPath = dictionaryPath;
+
     }
 
     void run() {
@@ -183,9 +191,24 @@ class Renamer {
         extractApk();
         if (!isSkipModify) modifySources();
         if (isPauseActive || isSkipModify) makePause();
+        if (!dictionaryPath.equals("")) replaceViaDictionary();
         buildApk();
         zipalignApk();
         signApk();
+    }
+
+    private void replaceViaDictionary() {
+        Map<String, String> dictionary = getDictionary(dictionaryPath);
+        ArrayList<File> filesList = getFilesList(getTempDir());
+        for (File f : filesList) {
+            for (String key : dictionary.keySet()) {
+                try {
+                    replaceBytesInFile(f, key.getBytes(), dictionary.get(key).getBytes());
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
     }
 
     //Show a message and wait enter to proceed
@@ -472,6 +495,45 @@ class Renamer {
         return new File(getTempDir() + File.separator + "AndroidManifest.xml");
     }
 
+    private Map getDictionary(String pathToDictionary) {
+        List<String> allLines = new ArrayList<String>();
+        Map result = new HashMap<String, String>();
+        try {
+            allLines = Files.readAllLines(Paths.get(pathToDictionary));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        for (String line : allLines) {
+            Pair pair = lineToMap(line);
+            result.put(pair.getKey(), pair.getValue());
+        }
+        l("Dictionary: " + result.toString());
+        return result;
+    }
+
+    private Pair<String, String> lineToMap(String line) {
+        List<Integer> splitterPosition = new ArrayList<>();
+        for (int index = line.indexOf(":");
+             index >= 0;
+             index = line.indexOf(":", index + 1)) {
+            int shieldPosition = index - 1;
+            if (shieldPosition >= 0) {
+                String shield = line.substring(shieldPosition, index);
+                if (!shield.equals("\\")) {
+                    splitterPosition.add(index);
+                }
+            }
+        }
+        if (splitterPosition.size() > 1)
+            throw new RuntimeException("Dictionary file has double splitter symbol \":\" in line \'" + line + "\'");
+        if (splitterPosition.size() == 0)
+            throw new RuntimeException("Dictionary file has no splitter symbol \":\" in line \'" + line + "\'");
+        String name = line.substring(0, splitterPosition.get(0)).replace("\\:", ":");
+        String value = line.substring(splitterPosition.get(0) + 1).replace("\\:", ":");
+        Pair<String, String> result = new Pair<>(name, value);
+        return result;
+    }
+
 
     private void extractApk() {
         String[] firstArgs = new String[]{"d", getSubjectApk().toString(), "-f", "-o", getTempDir().toString()};
@@ -492,7 +554,7 @@ class Renamer {
                 l("\n!!!\nTry to fix No resource error");
                 fixNoResourceError(); //Fix apktool problem with manifest
                 runJar(getApktoolJar(), command);
-            } catch (Renamer.JarExecutionException e1){
+            } catch (Renamer.JarExecutionException e1) {
                 l("\n!!!\nTry to fix Invalid resource directory name error by --use-aapt2");
                 String[] fixInvalidResourceDirectoryNameCommand = concat(command, new String[]{"--use-aapt2"});
                 runJar(getApktoolJar(), fixInvalidResourceDirectoryNameCommand);
@@ -506,12 +568,12 @@ class Renamer {
         return result;
     }
 
-    private String[] stringToArguments(String s){
+    private String[] stringToArguments(String s) {
         ArrayList<String> result = new ArrayList();
         String[] listArgs = s.split(" ");
         for (int i = 0; i < listArgs.length; i++) {
             String value = listArgs[i];
-            if (!value.equals("")){
+            if (!value.equals("")) {
                 result.add(value);
             }
         }
