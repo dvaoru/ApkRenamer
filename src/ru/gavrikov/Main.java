@@ -7,7 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
 
-import javafx.util.Pair;
+
 import org.apache.commons.io.FileUtils;
 import org.w3c.dom.*;
 import org.xml.sax.SAXException;
@@ -506,14 +506,15 @@ class Renamer {
             e.printStackTrace();
         }
         for (String line : allLines) {
-            Pair pair = lineToMap(line);
-            result.put(pair.getKey(), pair.getValue());
+            if (line.equals("")) continue;
+            String[] pair = lineToMap(line);
+            result.put(pair[0], pair[1]);
         }
         l("Dictionary: " + result.toString());
         return result;
     }
 
-    private Pair<String, String> lineToMap(String line) {
+    private String[] lineToMap(String line) {
         List<Integer> splitterPosition = new ArrayList<>();
         for (int index = line.indexOf(":");
              index >= 0;
@@ -532,8 +533,7 @@ class Renamer {
             throw new RuntimeException("Dictionary file has no splitter symbol \":\" in line \'" + line + "\'");
         String name = line.substring(0, splitterPosition.get(0)).replace("\\:", ":");
         String value = line.substring(splitterPosition.get(0) + 1).replace("\\:", ":");
-        Pair<String, String> result = new Pair<>(name, value);
-        return result;
+        return new String[]{name, value};
     }
 
 
