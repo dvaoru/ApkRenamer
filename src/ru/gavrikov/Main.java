@@ -979,6 +979,7 @@ class Renamer {
 
         for (File folder : smaliFolders) {
             File cache = movePackageToCache(folder, oldPackageName);
+            deleteOldPackageFolders(folder, oldPackageName);
             if (cache != null) {
                 File destination = moveFromCacheToPackage(folder, newPackageName);
             }
@@ -1006,14 +1007,45 @@ class Renamer {
                 FileUtils.deleteDirectory(cache);
                 cache.mkdir();
                 FileUtils.copyDirectory(sourceFolder, cache);
-                File oldPackageRoot = new File(smaliFolder, packageName.split("\\.")[0]);
-                FileUtils.deleteDirectory(oldPackageRoot);
                 return cache;
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         }
         return null;
+    }
+
+    private void deleteOldPackageFolders(File smaliFolder, String packageName) {
+        try {
+            ArrayList<File> foldersForDeleting = getFolderTreeByPackageName(smaliFolder, packageName);
+            if (foldersForDeleting.isEmpty()) return;
+            FileUtils.deleteDirectory(foldersForDeleting.get(0));
+            foldersForDeleting.remove(0);
+            for (File f: foldersForDeleting){
+                if (f.listFiles().length == 0) {
+                    FileUtils.deleteDirectory(f);
+                };
+            }
+
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private ArrayList<File> getFolderTreeByPackageName(File smaliFolder, String packageName) {
+        ArrayList<String> foldersTree = new ArrayList<>(Arrays.asList(packageName.split(("\\."))));
+        ArrayList<File> resultFolders = new ArrayList<>();
+        while (!foldersTree.isEmpty()) {
+            File deepFolder = new File(smaliFolder.getAbsolutePath());
+            for (String n : foldersTree) {
+                deepFolder = new File(deepFolder, n);
+            }
+            if (deepFolder.exists()) {
+                resultFolders.add(deepFolder);
+            }
+            foldersTree.remove(foldersTree.size() - 1);
+        }
+        return resultFolders;
     }
 
     private File moveFromCacheToPackage(File smaliFolder, String packageName) {
