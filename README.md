@@ -4,6 +4,10 @@ Use the renamer program to change an app name, a package name and an icon in an 
 
 Requirement - [JRE 1.8 (64-bit)](https://www.java.com/en/download/manual.jsp)
 
+## Download:
+
+[ApkRenamer.zip](https://github.com/dvaoru/ApkRenamer/releases/latest/download/ApkRenamer.zip)
+
 
 ## Usage:
 ```
@@ -46,11 +50,6 @@ original text:replacement text
 another original text:another replacement text
 ```
 &nbsp;&nbsp;&nbsp;&nbsp; The splitter is ":" symbol. . If you need to include this symbol in the replacement text, you can escape it using "/:".
-
-## Download:
-
-[ApkRenamer.zip](https://github.com/dvaoru/ApkRenamer/releases/latest/download/ApkRenamer.zip)
-
 
 ## Notice:
 - You may not use ApkRenamer for any illegal purposes;
