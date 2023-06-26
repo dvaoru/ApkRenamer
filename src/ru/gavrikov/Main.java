@@ -8,6 +8,7 @@ import java.nio.file.Paths;
 import java.util.*;
 
 
+import net.coobird.thumbnailator.Thumbnails;
 import org.apache.commons.io.FileUtils;
 import org.w3c.dom.*;
 import org.xml.sax.SAXException;
@@ -56,6 +57,7 @@ public class Main {
 //        } else {
 //            mRenamer = new Renamer(isDeepRename, isPauseActive, isSkipModify);
 //        }
+        System.out.println("Java version = " + System.getProperty("java.version"));
 
         mRenamer.run();
 
@@ -734,11 +736,20 @@ class Renamer {
 
     private void sendNewIcon(File newIcon, File minmapDir, String newIconName) {
         int size = getDpi(minmapDir);
-        String command = "" + getSjitJar() + " -in " + newIcon + " -resize " + size + "px -out " + minmapDir + File.separator + newIconName + ".png";
-        l(command);
-        runJar(getSjitJar(), new String[]{"-in", newIcon.toString(), "-resize", size + "px", "-out", minmapDir + File.separator + newIconName + ".png"});
-    }
+//        String command = "" + getSjitJar() + " -in " + newIcon + " -resize " + size + "px -out " + minmapDir + File.separator + newIconName + ".png";
+//
+//        runJar(getSjitJar(), new String[]{"-in", newIcon.toString(), "-resize", size + "px", "-out", minmapDir + File.separator + newIconName + ".png"});
 
+        try {
+            File resizedIcon = new File(minmapDir, newIconName + ".png");
+            l("Resize icon from " + newIcon + " to " + resizedIcon);
+            Thumbnails.of(newIcon)
+                    .size(size, size)
+                    .toFile(resizedIcon);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private int getDpi(File mipMapFolder) {
         String name = mipMapFolder.getName();
