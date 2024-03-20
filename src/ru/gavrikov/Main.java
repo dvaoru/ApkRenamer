@@ -585,7 +585,14 @@ class Renamer {
     }
 
     private void zipalignApk() {
-        runExec(getZipalignExe(), new String[]{"-p", "-f", "-v", "4", getUnsignedApk().toString(), getZipalignedApk().toString()});
+        File zipalignFile = getZipalignExe();
+        if (!zipalignFile.canExecute()) {
+            l("\nError! Can't execute zipalign file!");
+            l("Please make the file 'zipalign' executable using the following command:\n" +
+                    "sudo chmod +x '" + zipalignFile +"'");
+            System.exit(1);
+        }
+        runExec(zipalignFile, new String[]{"-p", "-f", "-v", "4", getUnsignedApk().toString(), getZipalignedApk().toString()});
         getUnsignedApk().delete();
     }
 
@@ -1032,10 +1039,11 @@ class Renamer {
             if (foldersForDeleting.isEmpty()) return;
             FileUtils.deleteDirectory(foldersForDeleting.get(0));
             foldersForDeleting.remove(0);
-            for (File f: foldersForDeleting){
+            for (File f : foldersForDeleting) {
                 if (f.listFiles().length == 0) {
                     FileUtils.deleteDirectory(f);
-                };
+                }
+                ;
             }
 
         } catch (IOException e) {
