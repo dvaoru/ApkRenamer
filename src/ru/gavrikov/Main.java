@@ -679,6 +679,7 @@ class Renamer {
     private String getNameLabel(Node manifest) {
         Node att = getAttribute(manifest, new String[]{"application"}, "android:label");
         String result = att.getNodeValue();
+        if (!result.contains("@string/")) return null;
         result = result.replace("@string/", "");
         return result;
     }
@@ -791,10 +792,15 @@ class Renamer {
 
     private void changeStrings(Node manifest) {
         String name_label = getNameLabel(manifest);
+
         HashMap<String, String> forReplace = new HashMap<>();
         forReplace.putAll(getMapsApiKey());
         if (!this.appName.equals("")) {
-            forReplace.put(name_label, this.appName);
+            if (name_label != null) {
+                forReplace.put(name_label, this.appName);
+            }else {
+                replaceAttribute(manifest, new String[]{"application"}, "android:label" , this.appName);
+            }
         }
 
         for (File f : getStringsFiles()) {
